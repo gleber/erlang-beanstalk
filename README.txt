@@ -47,7 +47,7 @@ be given the socket connection as the last argument. For example:
 
   {reserved, Job} = beanstalk:reserve(Socket).
 
-  deleted = beanstalk:delete(Job, Socket).
+  deleted = beanstalk:delete(JobID, Socket).
 
 And so on.
 
