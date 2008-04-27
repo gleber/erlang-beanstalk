@@ -42,19 +42,19 @@ new(ID, Body) ->
   [{id, ID}, {body, Body}].
 
 id(Job) ->
-  proplists:fetch(id, Job).
+  proplists:get_value(id, Job).
 
 body(Job) ->
-  proplists:fetch(body, Job).
+  proplists:get_value(body, Job).
 
 priority(Job) ->
-  proplists:fetch(priority, Job, 0).
+  proplists:get_value(priority, Job, 0).
 
 delay(Job) ->
-  proplists:fetch(delay, Job, 0).
+  proplists:get_value(delay, Job, 0).
 
 ttr(Job) ->
-  proplists:fetch(ttr, Job, 60).
+  proplists:get_value(ttr, Job, 60).
 
 with(Key, Value, Job) ->
   [{Key, Value}|proplists:delete(Key, Job)].
