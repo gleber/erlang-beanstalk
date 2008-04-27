@@ -43,7 +43,7 @@ All the functions in the beanstalk module (apart from connect/2)
 correspond to calls in the beanstalkd protocol. Each expects to
 be given the socket connection as the last argument. For example:
 
-  beanstalk:put(Job, Socket).
+  {inserted, JobID} = beanstalk:put(Job, Socket).
 
   {reserved, Job} = beanstalk:reserve(Socket).
 
