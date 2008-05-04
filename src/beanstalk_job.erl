@@ -34,27 +34,27 @@
 
 
 new(ID) when is_integer(ID) ->
-  [{id, ID}];
+  {beanstalk_job, [{id, ID}]};
 new(Body) when is_list(Body); is_binary(Body) ->
-  [{body, Body}].
+  {beanstalk_job, [{body, Body}]}.
 
 new(ID, Body) ->
-  [{id, ID}, {body, Body}].
+  {beanstalk_job, [{id, ID}, {body, Body}]}.
 
-id(Job) ->
-  proplists:get_value(id, Job).
+id({beanstalk_job, Attrs}) ->
+  proplists:get_value(id, Attrs).
 
-body(Job) ->
-  proplists:get_value(body, Job).
+body({beanstalk_job, Attrs}) ->
+  proplists:get_value(body, Attrs).
 
-priority(Job) ->
-  proplists:get_value(priority, Job, 0).
+priority({beanstalk_job, Attrs}) ->
+  proplists:get_value(priority, Attrs, 0).
 
-delay(Job) ->
-  proplists:get_value(delay, Job, 0).
+delay({beanstalk_job, Attrs}) ->
+  proplists:get_value(delay, Attrs, 0).
 
-ttr(Job) ->
-  proplists:get_value(ttr, Job, 60).
+ttr({beanstalk_job, Attrs}) ->
+  proplists:get_value(ttr, Attrs, 60).
 
-with(Key, Value, Job) ->
-  [{Key, Value}|proplists:delete(Key, Job)].
+with(Key, Value, {beanstalk_job, Attrs}) ->
+  {beanstalk_job, [{Key, Value}|proplists:delete(Key, Attrs)]}.
