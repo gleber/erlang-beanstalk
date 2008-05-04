@@ -162,7 +162,11 @@ process_prefixed(_Prefix, _Atom, _Fun, Response) ->
 receive_response(Socket) ->
   receive
     {tcp, Socket, Response} ->
-      process_errors({ok, Response})
+      process_errors({ok, Response});
+    {tcp_closed, Socket} ->
+      {error, socket_closed};
+    {tcp_error, Socket, Reason} ->
+      {error, Reason}
   end.
 
 process_errors(Response) ->
