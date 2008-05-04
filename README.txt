@@ -58,3 +58,16 @@ WTF?
 Found a bug? Think I could have done something better?
 
 Don't let it trouble you :) Let me know!
+
+
+Who should I contact?
+---------------------
+
+Tim Fletcher (tfletcher.com).
+
+
+Acknowledgements
+----------------
+
+Thanks to Dustin Sallings for introducing me to Emakefiles.
+
