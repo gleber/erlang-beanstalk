@@ -51,6 +51,8 @@
 connect(Host, Port) ->
   gen_tcp:connect(Host, Port, [binary, {packet, 0}]).
 
+put(Body, Socket) when is_list(Body); is_binary(Body) ->
+  beanstalk:put(beanstalk_job:new(Body), Socket);
 put(Job, Socket) ->
   Body = beanstalk_job:body(Job),
   send_command({put, priority(Job), delay(Job), ttr(Job), size_of(Body)}, Socket),
