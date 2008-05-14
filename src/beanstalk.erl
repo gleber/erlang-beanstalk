@@ -202,10 +202,7 @@ build_command(Parts) when is_list(Parts) ->
   lists:reverse([$\n,$\r|lists:foldl(fun build_command/2, [], Parts)]).
 
 build_command(Part, Message) when is_list(Message) ->
-  reverse_onto(case Message of [] -> []; _ -> [32|Message] end, to_string(Part)).
-
-reverse_onto(Ys, Xs) when is_list(Ys), is_list(Xs) ->
-  lists:foldl(fun(X, Acc) -> [X|Acc] end, Ys, Xs).
+  lists:reverse(to_string(Part), case Message of [] -> []; _ -> [32|Message] end).
 
 to_string(Int) when is_integer(Int) ->
   integer_to_list(Int);
