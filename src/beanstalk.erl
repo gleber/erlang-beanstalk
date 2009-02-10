@@ -6,6 +6,7 @@
 -export([put/2]).
 -export([use/2]).
 -export([reserve/1]).
+-export([reserve_with_timeout/1, reserve_with_timeout/2]).
 -export([delete/2]).
 -export([release/2]).
 -export([bury/2]).
@@ -49,6 +50,12 @@ use(Tube, Socket) ->
 reserve(Socket) ->
   send_command("reserve\r\n", Socket),
   process(deadline_soon,
+  process_job(reserved, receive_response(Socket))).
+
+reserve_with_timeout(Socket) -> reserve_with_timeout(0, Socket).
+reserve_with_timeout(Timeout, Socket) when is_integer(Timeout), Timeout >= 0 ->
+  send_command({'reserve-with-timeout', Timeout}, Socket),
+  process(timed_out,
   process_job(reserved, receive_response(Socket))).
 
 delete(Job, Socket) when is_list(Job) ->
