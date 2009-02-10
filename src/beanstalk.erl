@@ -24,7 +24,6 @@
 
 -import(beanstalk_job, [id/1, priority/1, delay/1, ttr/1]).
 
-
 connect(Host, Port) ->
   gen_tcp:connect(Host, Port, [binary, {packet, 0}]).
 
@@ -35,7 +34,7 @@ put(Job, Socket) ->
   send_command({put, priority(Job), delay(Job), ttr(Job), size_of(Body)}, Socket),
   gen_tcp:send(Socket, Body),
   gen_tcp:send(Socket, "\r\n"),
-  process_int(<<"INSERTED">>, inserted, receive_response(Socket)).
+  process_int(inserted, receive_response(Socket)).
 
 use(Tube, Socket) ->
   send_command({use, Tube}, Socket),
@@ -43,19 +42,19 @@ use(Tube, Socket) ->
 
 reserve(Socket) ->
   send_command("reserve\r\n", Socket),
-  process(<<"DEADLINE_SOON\r\n">>, deadline_soon,
-  process_job(<<"RESERVED">>, reserved, receive_response(Socket))).
+  process(deadline_soon,
+  process_job(reserved, receive_response(Socket))).
 
 delete(Job, Socket) when is_list(Job) ->
   delete(beanstalk_job:id(Job), Socket);
 delete(ID, Socket) when is_integer(ID) ->
   send_command({delete, ID}, Socket),
-  process(<<"DELETED\r\n">>, deleted,
+  process(deleted,
   process_not_found(receive_response(Socket))).
 
 release(Job, Socket) ->
   send_command({release, id(Job), priority(Job), delay(Job)}, Socket),
-  process(<<"RELEASED\r\n">>, released,
+  process(released,
   process_buried(process_not_found(receive_response(Socket)))).
 
 bury(Job, Socket) ->
@@ -68,7 +67,7 @@ watch(Tube, Socket) ->
 
 ignore(Tube, Socket) ->
   send_command({ignore, Tube}, Socket),
-  process(<<"NOT_IGNORED\r\n">>, not_ignored,
+  process(not_ignored,
   process_watching(receive_response(Socket))).
 
 peek(ID, Socket) when is_integer(ID) ->
@@ -89,7 +88,7 @@ peek_buried(Socket) ->
 
 kick(Bound, Socket) when is_integer(Bound) ->
   send_command({kick, Bound}, Socket),
-  process_int(<<"KICKED">>, kicked, receive_response(Socket)).
+  process_int(kicked, receive_response(Socket)).
 
 stats_job(ID, Socket) ->
   send_command({"stats-job", ID}, Socket),
@@ -115,21 +114,20 @@ list_tubes_watched(Socket) ->
   send_command("list-tubes-watched\r\n", Socket),
   process_yaml(receive_response(Socket)).
 
-
 receive_peek_response(Socket) ->
-  process_job(<<"FOUND">>, found, process_not_found(receive_response(Socket))).
+  process_job(found, process_not_found(receive_response(Socket))).
 
 process_watching(Response) ->
-  process_int(<<"WATCHING">>, watching, Response).
+  process_int(watching, Response).
 
 process_buried(Response) ->
-  process(<<"BURIED\r\n">>, buried, Response).
+  process(buried, Response).
 
 process_not_found(Response) ->
-  process(<<"NOT_FOUND\r\n">>, not_found, Response).
+  process(not_found, Response).
 
 process_using(Response) ->
-  process_prefixed(<<"USING">>, using, fun binary_to_list/1, Response).
+  process_prefixed(using, fun binary_to_list/1, Response).
 
 process_yaml({ok, <<"OK ", Bin/bytes>>}) ->
   {DataLength, <<"\r\n", Rem/bytes>>} = binary_take_int(Bin),
@@ -137,26 +135,27 @@ process_yaml({ok, <<"OK ", Bin/bytes>>}) ->
 process_yaml(Response) ->
   Response.
 
-process_job(Prefix, Atom, Response) ->
-  process_prefixed(Prefix, Atom, fun process_job_data/1, Response).
+process_job(Atom, Response) ->
+  process_prefixed(Atom, fun process_job_data/1, Response).
 
 process_job_data(Bin) ->
   {ID, <<" ", Bin2/bytes>>} = binary_take_int(Bin),
   {_BodyLength, <<"\r\n", Body/bytes>>} = binary_take_int(Bin2),
   beanstalk_job:new(ID, Body).
 
-process_int(Prefix, Atom, Response) ->
-  process_prefixed(Prefix, Atom, fun binary_to_integer/1, Response).
+process_int(Atom, Response) ->
+  process_prefixed(Atom, fun binary_to_integer/1, Response).
 
-process_prefixed(Prefix, Atom, Fun, Response={ok, Data}) ->
-  case split_binary(Data, size(Prefix)) of
+process_prefixed(Atom, Fun, Response={ok, Data}) ->
+  Prefix = string:to_upper(atom_to_list(Atom)),
+  case split_binary(Data, length(Prefix)) of
     {Prefix, <<" ", Rem/bytes>>} ->
       Bin = element(1, split_binary(Rem, size(Rem) - 2)), % remove \r\n
       {Atom, Fun(Bin)};
     _ ->
       Response
   end;
-process_prefixed(_Prefix, _Atom, _Fun, Response) ->
+process_prefixed(_Atom, _Fun, Response) ->
   Response.
 
 receive_response(Socket) ->
@@ -170,17 +169,24 @@ receive_response(Socket) ->
   end.
 
 process_errors(Response) ->
-  process(<<"OUT_OF_MEMORY\r\n">>, {error, out_of_memory},
-  process(<<"INTERNAL_ERROR\r\n">>, {error, internal_error},
-  process(<<"DRAINING\r\n">>, {error, draining},
-  process(<<"BAD_FORMAT\r\n">>, {error, bad_format},
-  process(<<"UNKNOWN_COMMAND\r\n">>, {error, unknown_command},
-  Response))))).
+  case
+      process(out_of_memory,
+      process(internal_error,
+      process(draining,
+      process(bad_format,
+      process(unknown_command,
+      Response))))) of
+    Known when is_atom(Known) -> {error, Known};
+    _ -> Response
+  end.
 
-process(Message, Term, _Response={ok, Message}) ->
-  Term;
-process(_Message, _Term, Response) ->
-  Response.
+process(Term, Response={ok, Message}) ->
+  case [string:to_upper(atom_to_list(Term)) | "\r\n"] of
+    Message -> Term;
+    _ -> Response
+  end;
+process(_, Response) ->
+    Response.
 
 binary_to_integer(Bin) when is_binary(Bin) ->
   list_to_integer(binary_to_list(Bin)).
@@ -215,7 +221,6 @@ size_of(List) when is_list(List) ->
   length(List);
 size_of(Bin) when is_binary(Bin) ->
   size(Bin).
-
 
 yaml_parse(<<"---\n", Data/bytes>>) ->
   case Data of
