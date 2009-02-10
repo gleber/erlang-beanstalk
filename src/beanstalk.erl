@@ -48,7 +48,7 @@ use(Tube, Socket) ->
   process_using(receive_response(Socket)).
 
 reserve(Socket) ->
-  send_command("reserve\r\n", Socket),
+  send_command(reserve, Socket),
   process(deadline_soon,
   process_job(reserved, receive_response(Socket))).
 
@@ -88,15 +88,15 @@ peek(ID, Socket) when is_integer(ID) ->
   receive_peek_response(Socket).
 
 peek_ready(Socket) ->
-  send_command("peek-ready\r\n", Socket),
+  send_command('peek-ready', Socket),
   receive_peek_response(Socket).
 
 peek_delayed(Socket) ->
-  send_command("peek-delayed\r\n", Socket),
+  send_command('peek-delayed', Socket),
   receive_peek_response(Socket).
 
 peek_buried(Socket) ->
-  send_command("peek-buried\r\n", Socket),
+  send_command('peek-buried', Socket),
   receive_peek_response(Socket).
 
 kick(Bound, Socket) when is_integer(Bound) ->
@@ -104,27 +104,27 @@ kick(Bound, Socket) when is_integer(Bound) ->
   process_int(kicked, receive_response(Socket)).
 
 stats_job(ID, Socket) ->
-  send_command({"stats-job", ID}, Socket),
+  send_command({'stats-job', ID}, Socket),
   process_yaml(process_not_found(receive_response(Socket))).
 
 stats_tube(Tube, Socket) ->
-  send_command({"stats-tube", Tube}, Socket),
+  send_command({'stats-tube', Tube}, Socket),
   process_yaml(process_not_found(receive_response(Socket))).
 
 stats(Socket) ->
-  send_command("stats\r\n", Socket),
+  send_command(stats, Socket),
   process_yaml(receive_response(Socket)).
 
 list_tubes(Socket) ->
-  send_command("list-tubes\r\n", Socket),
+  send_command('list-tubes', Socket),
   process_yaml(receive_response(Socket)).
 
 list_tube_used(Socket) ->
-  send_command("list-tube-used\r\n", Socket),
+  send_command('list-tube-used', Socket),
   process_using(receive_response(Socket)).
 
 list_tubes_watched(Socket) ->
-  send_command("list-tubes-watched\r\n", Socket),
+  send_command('list-tubes-watched', Socket),
   process_yaml(receive_response(Socket)).
 
 receive_peek_response(Socket) ->
