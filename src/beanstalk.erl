@@ -1,6 +1,7 @@
 -module(beanstalk).
 
--export([connect/2]).
+-export([connect/0, connect/1, connect/2]).
+-export([close/1]).
 
 -export([put/2]).
 -export([use/2]).
@@ -24,8 +25,13 @@
 
 -import(beanstalk_job, [id/1, priority/1, delay/1, ttr/1]).
 
+connect() -> connect({127,0,0,1}).
+connect(IP) -> connect(IP, 11300).
 connect(Host, Port) ->
   gen_tcp:connect(Host, Port, [binary, {packet, 0}]).
+
+close(Socket) ->
+  gen_tcp:close(Socket).
 
 put(Body, Socket) when is_list(Body); is_binary(Body) ->
   beanstalk:put(beanstalk_job:new(Body), Socket);
