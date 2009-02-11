@@ -1,134 +1,238 @@
 -module(beanstalk).
+-behaviour(gen_server2).
 
--export([connect/0, connect/1, connect/2]).
--export([close/1]).
+% gen_server callbacks
+-export(
+  [init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--export([put/2]).
--export([use/2]).
--export([reserve/1]).
--export([reserve_with_timeout/1, reserve_with_timeout/2]).
--export([delete/2]).
--export([release/2]).
--export([bury/2]).
--export([watch/2]).
--export([ignore/2]).
--export([peek/2]).
--export([peek_ready/1]).
--export([peek_delayed/1]).
--export([peek_buried/1]).
--export([kick/2]).
--export([stats_job/2]).
--export([stats_tube/2]).
--export([stats/1]).
--export([list_tubes/1]).
--export([list_tube_used/1]).
--export([list_tubes_watched/1]).
+-export(
+  [connect/0, connect/1, connect/2
+
+  ,put/1
+  ,use/1
+  ,reserve/0
+  ,reserve_with_timeout/0, reserve_with_timeout/1
+  ,delete/1
+  ,release/1
+  ,bury/1
+  ,watch/1
+  ,ignore/1
+  ,peek/1
+  ,peek_ready/0
+  ,peek_delayed/0
+  ,peek_buried/0
+  ,kick/1
+  ,stats_job/1
+  ,stats_tube/1
+  ,stats/0
+  ,list_tubes/0
+  ,list_tube_used/0
+  ,list_tubes_watched/0
+  ]).
 
 -import(beanstalk_job, [id/1, priority/1, delay/1, ttr/1]).
 
-connect() -> connect({127,0,0,1}).
-connect(IP) -> connect(IP, 11300).
+-define(TIMEOUT_START, 30000).
+-define(TIMEOUT_CLIENT, 15000).
+-define(TIMEOUT_SERVER, 60000).
+-define(DEFAULT_HOST, {127,0,0,1}).
+-define(DEFAULT_PORT, 11300).
+
+% gen_server callbacks
+init([Host, Port]) ->
+  Me = self(),
+  Pid = spawn(fun() -> start_(Me, Host, Port) end),
+  receive
+  {ok, Pid} ->
+    {ok, Pid};
+  {error, Reason} ->
+    {stop, Reason}
+  after ?TIMEOUT_START->
+    {stop, {timeout, ?TIMEOUT_START}}
+  end.
+
+handle_call(Msg, _From, State) ->
+  State ! {Msg, self()},
+  receive
+    Reply -> {reply, Reply, State}
+  end.
+
+handle_cast(Msg, State) when is_tuple(Msg) ->
+  State ! Msg,
+  {noreply, State};
+handle_cast(Msg, State) when is_atom(Msg) ->
+  State ! {Msg},
+  {noreply, State};
+handle_cast(_Msg, State) ->
+  {noreply, State}.
+
+handle_info({'EXIT', normal}, _State) ->
+  {stop, normal, exited};
+handle_info(_Info, State) ->
+  {noreply, State}.
+
+terminate(_Reason, State) ->
+  State ! close.
+
+code_change(_OldVersion, State, _Extra) ->
+  {ok, State}.
+
+% internal functions for gen_server
+
+start_(Parent, Host, Port) ->
+  case gen_tcp:connect(Host, Port, [binary, {packet, 0}, {active, false}]) of
+    {ok, Socket} -> Parent ! {ok, self()}, loop(Socket);
+    Other -> Parent ! Other
+  end.
+
+loop(Socket) ->
+  case
+    receive
+    {{send, Body}, Who} ->
+      case gen_tcp:send(Socket, Body) of
+        ok ->
+          R = from_socket(Socket, <<>>),
+          Who ! R,
+          R;
+        R ->
+          Who ! R,
+          R
+      end;
+    {answer, Who} ->
+      R = from_socket(Socket, <<>>),
+      Who ! R,
+      R;
+    {close, _} ->
+      gen_tcp:close(Socket),
+      {error, closed}
+    end
+  of
+    {ok, _} -> loop(Socket);
+    Error -> Error
+  end.
+
+from_socket(Socket, Data) ->
+  case gen_tcp:recv(Socket, 0) of
+    {ok, Packet} ->
+      case size(Packet) - 2 of
+        S when S < 0 ->
+          from_socket(Socket, <<Data/binary, Packet/binary>>);
+        L ->
+          case Packet of
+            << _:L/binary, $\r, $\n >> ->
+              {ok, <<Data/binary, Packet/binary>>};
+            _ ->
+              from_socket(Socket, <<Data/binary, Packet/binary>>)
+          end
+      end;
+    Error ->
+      case Error of
+        {error, closed} -> ok;
+        _ -> gen_tcp:close(Socket)
+      end,
+      Error
+  end.
+
+% external API
+
+connect() -> connect(?DEFAULT_HOST).
+connect(IP) -> connect(IP, ?DEFAULT_PORT).
 connect(Host, Port) ->
-  gen_tcp:connect(Host, Port, [binary, {packet, 0}]).
+  gen_server2:start_link({local, ?MODULE}, ?MODULE, [Host, Port], []).
 
-close(Socket) ->
-  gen_tcp:close(Socket).
-
-put(Body, Socket) when is_list(Body); is_binary(Body) ->
-  beanstalk:put(beanstalk_job:new(Body), Socket);
-put(Job, Socket) ->
+put(Body) when is_list(Body); is_binary(Body) ->
+  ?MODULE:put(beanstalk_job:new(Body));
+put(Job) ->
   Body = beanstalk_job:body(Job),
-  send_command({put, priority(Job), delay(Job), ttr(Job), size_of(Body)}, Socket),
-  gen_tcp:send(Socket, Body),
-  gen_tcp:send(Socket, "\r\n"),
-  process_int(inserted, receive_response(Socket)).
+  Response = send_command({put, priority(Job), delay(Job), ttr(Job), size_of(Body)}, Body),
+  process_int(inserted, process_response(Response)).
 
-use(Tube, Socket) ->
-  send_command({use, Tube}, Socket),
-  process_using(receive_response(Socket)).
+use(Tube) ->
+  Response = send_command({use, Tube}),
+  process_using(process_response(Response)).
 
-reserve(Socket) ->
-  send_command(reserve, Socket),
+reserve() ->
+  Response = send_command(reserve),
   process(deadline_soon,
-  process_job(reserved, receive_response(Socket))).
+  process_job(reserved, process_response(Response))).
 
-reserve_with_timeout(Socket) -> reserve_with_timeout(0, Socket).
-reserve_with_timeout(Timeout, Socket) when is_integer(Timeout), Timeout >= 0 ->
-  send_command({'reserve-with-timeout', Timeout}, Socket),
+reserve_with_timeout() -> reserve_with_timeout(0).
+reserve_with_timeout(Timeout) when is_integer(Timeout), Timeout >= 0 ->
+  Response = send_command({'reserve-with-timeout', Timeout}),
   process(timed_out,
-  process_job(reserved, receive_response(Socket))).
+  process_job(reserved, process_response(Response))).
 
-delete(Job, Socket) when is_list(Job) ->
-  delete(beanstalk_job:id(Job), Socket);
-delete(ID, Socket) when is_integer(ID) ->
-  send_command({delete, ID}, Socket),
+delete(Job) when is_list(Job) ->
+  delete(beanstalk_job:id(Job));
+delete(ID) when is_integer(ID) ->
+  Response = send_command({delete, ID}),
   process(deleted,
-  process_not_found(receive_response(Socket))).
+  process_not_found(process_response(Response))).
 
-release(Job, Socket) ->
-  send_command({release, id(Job), priority(Job), delay(Job)}, Socket),
+release(Job) ->
+  Response = send_command({release, id(Job), priority(Job), delay(Job)}),
   process(released,
-  process_buried(process_not_found(receive_response(Socket)))).
+  process_buried(process_not_found(process_response(Response)))).
 
-bury(Job, Socket) ->
-  send_command({bury, id(Job), priority(Job)}, Socket),
-  process_buried(process_not_found(receive_response(Socket))).
+bury(Job) ->
+  Response = send_command({bury, id(Job), priority(Job)}),
+  process_buried(process_not_found(process_response(Response))).
 
-watch(Tube, Socket) ->
-  send_command({watch, Tube}, Socket),
-  process_watching(receive_response(Socket)).
+watch(Tube) ->
+  Response = send_command({watch, Tube}),
+  process_watching(process_response(Response)).
 
-ignore(Tube, Socket) ->
-  send_command({ignore, Tube}, Socket),
+ignore(Tube) ->
+  Response = send_command({ignore, Tube}),
   process(not_ignored,
-  process_watching(receive_response(Socket))).
+  process_watching(process_response(Response))).
 
-peek(ID, Socket) when is_integer(ID) ->
-  send_command({peek, ID}, Socket),
-  receive_peek_response(Socket).
+peek(ID) when is_integer(ID) ->
+  Response = send_command({peek, ID}),
+  receive_peek_response(Response).
 
-peek_ready(Socket) ->
-  send_command('peek-ready', Socket),
-  receive_peek_response(Socket).
+peek_ready() ->
+  Response = send_command('peek-ready'),
+  receive_peek_response(Response).
 
-peek_delayed(Socket) ->
-  send_command('peek-delayed', Socket),
-  receive_peek_response(Socket).
+peek_delayed() ->
+  Response = send_command('peek-delayed'),
+  receive_peek_response(Response).
 
-peek_buried(Socket) ->
-  send_command('peek-buried', Socket),
-  receive_peek_response(Socket).
+peek_buried() ->
+  Response = send_command('peek-buried'),
+  receive_peek_response(Response).
 
-kick(Bound, Socket) when is_integer(Bound) ->
-  send_command({kick, Bound}, Socket),
-  process_int(kicked, receive_response(Socket)).
+kick(Bound) when is_integer(Bound) ->
+  Response = send_command({kick, Bound}),
+  process_int(kicked, process_response(Response)).
 
-stats_job(ID, Socket) ->
-  send_command({'stats-job', ID}, Socket),
-  process_yaml(process_not_found(receive_response(Socket))).
+stats_job(ID) ->
+  Response = send_command({'stats-job', ID}),
+  process_yaml(process_not_found(process_response(Response))).
 
-stats_tube(Tube, Socket) ->
-  send_command({'stats-tube', Tube}, Socket),
-  process_yaml(process_not_found(receive_response(Socket))).
+stats_tube(Tube) ->
+  Response = send_command({'stats-tube', Tube}),
+  process_yaml(process_not_found(process_response(Response))).
 
-stats(Socket) ->
-  send_command(stats, Socket),
-  process_yaml(receive_response(Socket)).
+stats() ->
+  Response = send_command(stats),
+  process_yaml(process_response(Response)).
 
-list_tubes(Socket) ->
-  send_command('list-tubes', Socket),
-  process_yaml(receive_response(Socket)).
+list_tubes() ->
+  Response = send_command('list-tubes'),
+  process_yaml(process_response(Response)).
 
-list_tube_used(Socket) ->
-  send_command('list-tube-used', Socket),
-  process_using(receive_response(Socket)).
+list_tube_used() ->
+  Response = send_command('list-tube-used'),
+  process_using(process_response(Response)).
 
-list_tubes_watched(Socket) ->
-  send_command('list-tubes-watched', Socket),
-  process_yaml(receive_response(Socket)).
+list_tubes_watched() ->
+  Response = send_command('list-tubes-watched'),
+  process_yaml(process_response(Response)).
 
-receive_peek_response(Socket) ->
-  process_job(found, process_not_found(receive_response(Socket))).
+receive_peek_response(Response) ->
+  process_job(found, process_not_found(process_response(Response))).
 
 process_watching(Response) ->
   process_int(watching, Response).
@@ -162,8 +266,7 @@ process_int(Atom, Response) ->
 process_prefixed(Atom, Fun, Response={ok, Data}) ->
   Prefix = string:to_upper(atom_to_list(Atom)),
   case split_binary(Data, length(Prefix)) of
-    {Prefix, <<" ", Rem/bytes>>} ->
-      Bin = element(1, split_binary(Rem, size(Rem) - 2)), % remove \r\n
+    {Prefix, <<$ , Bin/bytes>>} ->
       {Atom, Fun(Bin)};
     _ ->
       Response
@@ -171,17 +274,7 @@ process_prefixed(Atom, Fun, Response={ok, Data}) ->
 process_prefixed(_Atom, _Fun, Response) ->
   Response.
 
-receive_response(Socket) ->
-  receive
-    {tcp, Socket, Response} ->
-      process_errors({ok, Response});
-    {tcp_closed, Socket} ->
-      {error, socket_closed};
-    {tcp_error, Socket, Reason} ->
-      {error, Reason}
-  end.
-
-process_errors(Response) ->
+process_response(Response) ->
   case
       process(out_of_memory,
       process(internal_error,
@@ -194,7 +287,7 @@ process_errors(Response) ->
   end.
 
 process(Term, Response={ok, Message}) ->
-  case [string:to_upper(atom_to_list(Term)) | "\r\n"] of
+  case string:to_upper(atom_to_list(Term)) of
     Message -> Term;
     _ -> Response
   end;
@@ -212,16 +305,20 @@ binary_take_int(<<C, Rem/bytes>>, Digits) when C >= $0, C =< $9 ->
 binary_take_int(Bin, Digits) ->
   {list_to_integer(lists:reverse(Digits)), Bin}.
 
-send_command(Cmd, Socket) when is_list(Cmd) ->
-  gen_tcp:send(Socket, Cmd);
-send_command(Cmd, Socket) when is_tuple(Cmd) ->
-  send_command(build_command(tuple_to_list(Cmd)), Socket).
+send_command(Cmd) when is_binary(Cmd); is_list(Cmd) ->
+  gen_server2:call(?MODULE, {send, Cmd});
+send_command(Cmd) ->
+  send_command(build_command(case is_atom(Cmd) of true -> {Cmd}; _ -> Cmd end)).
 
-build_command(Parts) when is_list(Parts) ->
-  lists:reverse([$\n,$\r|lists:foldl(fun build_command/2, [], Parts)]).
+send_command(Cmd, Data) ->
+  gen_server2:call(?MODULE, {send, iolist_to_binary([build_command(Cmd), Data, "\r\n"])}).
 
-build_command(Part, Message) when is_list(Message) ->
-  lists:reverse(to_string(Part), case Message of [] -> []; _ -> [32|Message] end).
+build_command(Cmd) when is_tuple(Cmd) ->
+  build_command(tuple_to_list(Cmd), []).
+
+build_command([], Parts) -> iolist_to_binary([lists:reverse(Parts) | "\r\n"]);
+build_command([H|T], Parts) ->
+  build_command(T, [to_string(H) | case Parts of [] -> []; _ -> [$ | Parts] end]).
 
 to_string(Int) when is_integer(Int) ->
   integer_to_list(Int);
