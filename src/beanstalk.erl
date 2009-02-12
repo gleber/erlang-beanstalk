@@ -164,8 +164,6 @@ reserve_with_timeout(Timeout) when is_integer(Timeout), Timeout >= 0 ->
   process(timed_out,
   process_job(reserved, process_response(Response))).
 
-delete(Job) when is_list(Job) ->
-  delete(beanstalk_job:id(Job));
 delete(ID) when is_integer(ID) ->
   Response = send_command({delete, ID}),
   process(deleted,
@@ -260,7 +258,7 @@ process_job(Atom, Response) ->
 process_job_data(Bin) ->
   {ID, <<" ", Bin2/bytes>>} = binary_take_int(Bin),
   {_BodyLength, <<"\r\n", Body/bytes>>} = binary_take_int(Bin2),
-  beanstalk_job:new(ID, Body).
+  {ID, Body}.
 
 process_int(Atom, Response) ->
   process_prefixed(Atom, fun binary_to_integer/1, Response).
