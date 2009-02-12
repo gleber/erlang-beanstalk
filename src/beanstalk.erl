@@ -30,8 +30,6 @@
   ,list_tubes_watched/0
   ]).
 
--import(beanstalk_job, [id/1, priority/1, delay/1, ttr/1]).
-
 -define(TIMEOUT_START, 30000).
 -define(TIMEOUT_CLIENT, 15000).
 -define(TIMEOUT_SERVER, 60000).
@@ -144,7 +142,7 @@ put(Body) when is_list(Body); is_binary(Body) ->
   ?MODULE:put(beanstalk_job:new(Body));
 put(Job) ->
   Body = beanstalk_job:body(Job),
-  Response = send_command({put, priority(Job), delay(Job), ttr(Job), size_of(Body)}, Body),
+  Response = send_command({put, beanstalk_job:priority(Job), beanstalk_job:delay(Job), beanstalk_job:ttr(Job), size_of(Body)}, Body),
   process_int(inserted, process_response(Response)).
 
 use(Tube) ->
@@ -170,12 +168,12 @@ delete(ID) when is_integer(ID) ->
   process_not_found(process_response(Response))).
 
 release(Job) ->
-  Response = send_command({release, id(Job), priority(Job), delay(Job)}),
+  Response = send_command({release, beanstalk_job:id(Job), beanstalk_job:priority(Job), beanstalk_job:delay(Job)}),
   process(released,
   process_buried(process_not_found(process_response(Response)))).
 
 bury(Job) ->
-  Response = send_command({bury, id(Job), priority(Job)}),
+  Response = send_command({bury, beanstalk_job:id(Job), beanstalk_job:priority(Job)}),
   process_buried(process_not_found(process_response(Response))).
 
 watch(Tube) ->

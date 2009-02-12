@@ -9,7 +9,6 @@
 -export([ttr/1]).
 -export([with/3]).
 
-
 new(ID) when is_integer(ID) ->
   {beanstalk_job, [{id, ID}]};
 new(Body) when is_list(Body); is_binary(Body) ->
