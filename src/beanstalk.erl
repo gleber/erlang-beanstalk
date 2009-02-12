@@ -154,13 +154,13 @@ use(Tube) ->
   process_using(process_response(Response)).
 
 reserve() ->
-  Response = send_command(reserve),
+  Response = send_and_wait_command(reserve),
   process(deadline_soon,
   process_job(reserved, process_response(Response))).
 
 reserve_with_timeout() -> reserve_with_timeout(0).
 reserve_with_timeout(Timeout) when is_integer(Timeout), Timeout >= 0 ->
-  Response = send_command({'reserve-with-timeout', Timeout}),
+  Response = send_and_wait_command({'reserve-with-timeout', Timeout}),
   process(timed_out,
   process_job(reserved, process_response(Response))).
 
@@ -312,6 +312,14 @@ send_command(Cmd) ->
 
 send_command(Cmd, Data) ->
   gen_server2:call(?MODULE, {send, iolist_to_binary([build_command(Cmd), Data, "\r\n"])}).
+
+send_and_wait_command(Cmd) when is_binary(Cmd); is_list(Cmd) ->
+  gen_server2:cast(?MODULE, {{send, Cmd}, self()}),
+  receive
+    Reply -> Reply
+  end;
+send_and_wait_command(Cmd) ->
+  send_and_wait_command(build_command(case is_atom(Cmd) of true -> {Cmd}; _ -> Cmd end)).
 
 build_command(Cmd) when is_tuple(Cmd) ->
   build_command(tuple_to_list(Cmd), []).
