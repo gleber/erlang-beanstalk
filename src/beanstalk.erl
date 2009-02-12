@@ -13,8 +13,8 @@
   ,reserve/0
   ,reserve_with_timeout/0, reserve_with_timeout/1
   ,delete/1
-  ,release/1
-  ,bury/1
+  ,release/1, release/2
+  ,bury/1, bury/2
   ,watch/1
   ,ignore/1
   ,peek/1
@@ -171,12 +171,19 @@ delete(ID) when is_integer(ID) ->
   process_not_found(process_response(Response))).
 
 release(Job) ->
-  Response = send_command({release, beanstalk_job:id(Job), beanstalk_job:priority(Job), beanstalk_job:delay(Job)}),
+  release(Job, []).
+
+release(Job, PL) when is_integer(Job), is_list(PL) ->
+  P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value  end,
+  Response = send_command({release, Job, P(pri, 0), P(delay, 0)}),
   process(released,
   process_buried(process_not_found(process_response(Response)))).
 
 bury(Job) ->
-  Response = send_command({bury, beanstalk_job:id(Job), beanstalk_job:priority(Job)}),
+  bury(Job, 0).
+
+bury(Job, Pri) when is_integer(Job), is_integer(Pri), pri >= 0 ->
+  Response = send_command({bury, Job, Pri}),
   process_buried(process_not_found(process_response(Response))).
 
 watch(Tube) ->
