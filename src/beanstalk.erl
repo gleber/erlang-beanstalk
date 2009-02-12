@@ -162,7 +162,8 @@ reserve_with_timeout() -> reserve_with_timeout(0).
 reserve_with_timeout(Timeout) when is_integer(Timeout), Timeout >= 0 ->
   Response = send_and_wait_command({'reserve-with-timeout', Timeout}),
   process(timed_out,
-  process_job(reserved, process_response(Response))).
+  process(deadline_soon,
+  process_job(reserved, process_response(Response)))).
 
 delete(ID) when is_integer(ID) ->
   Response = send_command({delete, ID}),
