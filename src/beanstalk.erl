@@ -144,7 +144,10 @@ put(Data, PL) when is_integer(Data) -> ?MODULE:put(integer_to_list(Data), PL);
 put(Body, PL) when is_list(Body); is_binary(Body) ->
   P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value  end,
   Response = send_command({put, P(pri, 0), P(delay, 0), P(ttr, 60), size_of(Body)}, Body),
-  process_int(inserted, process_response(Response)).
+  process('job_too_big',
+  process('exptected_clrf',
+  process_int(buried,
+  process_int(inserted, process_response(Response))))).
 
 use(Tube) ->
   Response = send_command({use, Tube}),
