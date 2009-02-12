@@ -15,6 +15,7 @@
   ,delete/1
   ,release/1, release/2
   ,bury/1, bury/2
+  ,touch/1
   ,watch/1
   ,ignore/1
   ,peek/1
@@ -185,6 +186,10 @@ bury(Job) ->
 bury(Job, Pri) when is_integer(Job), is_integer(Pri), pri >= 0 ->
   Response = send_command({bury, Job, Pri}),
   process_buried(process_not_found(process_response(Response))).
+
+touch(Job) when is_integer(Job) ->
+  Response = send_command({touch, Job}),
+  process(touched, process_not_found(process_response(Response))).
 
 watch(Tube) ->
   Response = send_command({watch, Tube}),
