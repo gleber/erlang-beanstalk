@@ -8,7 +8,7 @@
 -export(
   [connect/0, connect/1, connect/2
 
-  ,put/1
+  ,put/1, put/2
   ,use/1
   ,reserve/0
   ,reserve_with_timeout/0, reserve_with_timeout/1
@@ -138,11 +138,12 @@ connect(IP) -> connect(IP, ?DEFAULT_PORT).
 connect(Host, Port) ->
   gen_server2:start_link({local, ?MODULE}, ?MODULE, [Host, Port], []).
 
-put(Body) when is_list(Body); is_binary(Body) ->
-  ?MODULE:put(beanstalk_job:new(Body));
-put(Job) ->
-  Body = beanstalk_job:body(Job),
-  Response = send_command({put, beanstalk_job:priority(Job), beanstalk_job:delay(Job), beanstalk_job:ttr(Job), size_of(Body)}, Body),
+put(Item) -> ?MODULE:put(Item, []).
+
+put(Data, PL) when is_integer(Data) -> ?MODULE:put(integer_to_list(Data), PL);
+put(Body, PL) when is_list(Body); is_binary(Body) ->
+  P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value  end,
+  Response = send_command({put, P(pri, 0), P(delay, 0), P(ttr, 60), size_of(Body)}, Body),
   process_int(inserted, process_response(Response)).
 
 use(Tube) ->
