@@ -117,8 +117,8 @@ from_socket(Socket, Data) ->
           from_socket(Socket, <<Data/binary, Packet/binary>>);
         L ->
           case Packet of
-            << _:L/binary, $\r, $\n >> ->
-              {ok, <<Data/binary, Packet/binary>>};
+            << Stripped:L/binary, $\r, $\n >> ->
+              {ok, <<Data/binary, Stripped/binary>>};
             _ ->
               from_socket(Socket, <<Data/binary, Packet/binary>>)
           end
@@ -262,10 +262,10 @@ process_int(Atom, Response) ->
   process_prefixed(Atom, fun binary_to_integer/1, Response).
 
 process_prefixed(Atom, Fun, Response={ok, Data}) ->
-  Prefix = string:to_upper(atom_to_list(Atom)),
-  case split_binary(Data, length(Prefix)) of
-    {Prefix, <<$ , Bin/bytes>>} ->
-      {Atom, Fun(Bin)};
+  Prefix = iolist_to_binary([string:to_upper(atom_to_list(Atom)), $ ]),
+  case split_binary(Data, size(Prefix)) of
+    {Prefix, Rest} ->
+      {Atom, Fun(Rest)};
     _ ->
       Response
   end;
@@ -285,7 +285,7 @@ process_response(Response) ->
   end.
 
 process(Term, Response={ok, Message}) ->
-  case string:to_upper(atom_to_list(Term)) of
+  case list_to_binary(string:to_upper(atom_to_list(Term))) of
     Message -> Term;
     _ -> Response
   end;
