@@ -1,0 +1,5 @@
+* Attila Babo <github.com/issuu>
+
+* Tim Fletcher <github.com/tim> (current maintainer)
+
+* Dustin Sallings <github.com/dustin>
