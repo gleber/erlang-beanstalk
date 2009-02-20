@@ -146,7 +146,7 @@ put(Body, PL) when is_list(Body); is_binary(Body) ->
   P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value  end,
   Response = send_command({put, P(pri, 0), P(delay, 0), P(ttr, 60), size_of(Body)}, Body),
   process('job_too_big',
-  process('exptected_clrf',
+  process('expected_crlf',
   process_int(buried,
   process_int(inserted, process_response(Response))))).
 
@@ -175,7 +175,7 @@ release(Job) ->
   release(Job, []).
 
 release(Job, PL) when is_integer(Job), is_list(PL) ->
-  P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value  end,
+  P = fun(Key, Default) -> Value = proplists:get_value(Key, PL, Default), true = is_integer(Value), Value end,
   Response = send_command({release, Job, P(pri, 0), P(delay, 0)}),
   process(released,
   process_buried(process_not_found(process_response(Response)))).
@@ -183,7 +183,7 @@ release(Job, PL) when is_integer(Job), is_list(PL) ->
 bury(Job) ->
   bury(Job, 0).
 
-bury(Job, Pri) when is_integer(Job), is_integer(Pri), pri >= 0 ->
+bury(Job, Pri) when is_integer(Job), is_integer(Pri), Pri >= 0 ->
   Response = send_command({bury, Job, Pri}),
   process_buried(process_not_found(process_response(Response))).
 
