@@ -4,8 +4,9 @@
 
 
 test() ->
-  <<"RESERVE\r\n">> = to_binary({reserve}),
-  <<"USE foo\r\n">> = to_binary({use, "foo"}).
+  <<"reserve\r\n">> = to_binary({reserve}),
+  <<"use foo\r\n">> = to_binary({use, "foo"}),
+  ok.
 
 send(Socket, Command) ->
   gen_tcp:send(Socket, to_binary(Command)).
