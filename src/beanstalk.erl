@@ -30,9 +30,6 @@ use(Pid, Tube) ->
 reserve(Pid) ->
   gen_server:call(Pid, {'reserve'}, infinity).
 
-reserve_with_timeout(Pid) ->
-  reserve_with_timeout(Pid, 0).
-
 reserve_with_timeout(Pid, Timeout) ->
   gen_server:call(Pid, {'reserve-with-timeout', Timeout}).
 
