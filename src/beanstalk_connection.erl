@@ -16,7 +16,7 @@ init({Host, Port, Timeout}) ->
 handle_call({put, Data, Params}, _From, Socket) ->
   Pri = proplists:get_value(pri, Params, 0),
   Delay = proplists:get_value(delay, Params, 0),
-  TTR = proplists:get_value(delay, Params, 60),
+  TTR = proplists:get_value(ttr, Params, 60),
   beanstalk_command:send(Socket, {put, Pri, Delay, TTR, size(Data)}, Data),
   {reply, beanstalk_response:recv(Socket), Socket};
 handle_call(Command, _From, Socket) ->
