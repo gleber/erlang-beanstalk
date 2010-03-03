@@ -28,13 +28,10 @@ use(Pid, Tube) ->
   gen_server:call(Pid, {'use', Tube}).
 
 reserve(Pid) ->
-  gen_server:call(Pid, {'reserve'}).
+  gen_server:call(Pid, {'reserve'}, infinity).
 
-reserve_with_timeout(Pid) ->
-  reserve_with_timeout(Pid, 0).
-
-reserve_with_timeout(Pid, Timeout) ->
-  gen_server:call(Pid, {'reserve-with-timeout', Timeout}).
+reserve(Pid, Timeout) ->
+  gen_server:call(Pid, {'reserve-with-timeout', Timeout}, infinity).
 
 delete(Pid, ID) ->
   gen_server:call(Pid, {'delete', ID}).
